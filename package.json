@@ -1,0 +1,19 @@
+{
+  "name": "dreamboat",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "pnpm --parallel --filter client --filter server dev",
+    "build": "pnpm --filter shared build && pnpm --filter client build && pnpm --filter server build",
+    "type-check": "pnpm --filter shared type-check && pnpm --filter client type-check && pnpm --filter server type-check",
+    "lint": "pnpm --filter server lint",
+    "db:generate": "pnpm --filter server db:generate",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "db:push": "pnpm --filter server db:push"
+  }
+}

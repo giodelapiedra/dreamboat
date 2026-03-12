@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  GUEST
+  HOST
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum SubmissionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  NEEDS_REVIEW
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  image         String?
+  phone         String?
+  role          Role           @default(GUEST)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  listings      Listing[]
+  bookings      Booking[]
+  reviews       Review[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Listing {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  category      String
+  pricePerNight Decimal   @db.Decimal(10, 2)
+  currency      String    @default("PHP")
+  location      String
+  address       String
+  latitude      Float?
+  longitude     Float?
+  maxGuests     Int
+  bedrooms      Int
+  bathrooms     Int
+  amenities     String[]
+  isPublished   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  hostId        String
+  host          User      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  images        Image[]
+  bookings      Booking[]
+  reviews       Review[]
+
+  @@index([hostId])
+  @@index([category])
+  @@index([location])
+}
+
+model Image {
+  id        String  @id @default(cuid())
+  url       String
+  alt       String?
+  order     Int     @default(0)
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  checkIn      DateTime
+  checkOut     DateTime
+  totalPrice   Decimal       @db.Decimal(10, 2)
+  guestCount   Int
+  status       BookingStatus @default(PENDING)
+  specialNotes String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  guestId      String
+  guest        User          @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  listingId    String
+  listing      Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  payment      Payment?
+
+  @@index([guestId])
+  @@index([listingId])
+  @@index([checkIn, checkOut])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("PHP")
+  status          PaymentStatus @default(PENDING)
+  stripePaymentId String?       @unique
+  stripeSessionId String?       @unique
+  createdAt       DateTime      @default(now())
+  bookingId       String        @unique
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([authorId, listingId])
+  @@index([listingId])
+}
+
+model Form {
+  id                String       @id @default(cuid())
+  slug              String       @unique
+  title             String
+  description       String
+  completionTitle   String
+  completionMessage String
+  submitLabel       String
+  steps             Json
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  submissions       Submission[]
+}
+
+model Submission {
+  id                 String           @id @default(cuid())
+  formId             String
+  form               Form             @relation(fields: [formId], references: [id], onDelete: Cascade)
+  guestName          String
+  guestEmail         String
+  status             SubmissionStatus @default(PENDING)
+  completionPercent  Int              @default(0)
+  missingCount       Int              @default(0)
+  bookingReference   String
+  shopifyOrderNumber String
+  propertyName       String
+  checkIn            String
+  checkOut           String
+  answers            Json
+  confirmationToken  String?          @unique
+  source             String           @default("SHOPIFY")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  timeline           SubmissionEvent[]
+
+  @@index([formId])
+  @@index([status])
+  @@index([confirmationToken])
+  @@index([shopifyOrderNumber])
+}
+
+model SubmissionEvent {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  occurredAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+
+  @@index([submissionId])
+}
