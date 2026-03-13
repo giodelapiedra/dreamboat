@@ -9,7 +9,7 @@ const formFieldOptionSchema = z.object({
 
 export const formFieldSchema = z.object({
   id: z.string(),
-  type: z.enum(["short-text", "email", "phone", "date", "select", "textarea", "boolean"]),
+  type: z.enum(["short-text", "email", "phone", "date", "select", "select-or-other", "textarea", "boolean"]),
   label: z.string(),
   placeholder: z.string().optional(),
   helperText: z.string().optional(),

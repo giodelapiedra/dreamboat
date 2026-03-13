@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dreamboat Backend Creator"
+  short_description: "Build the Dreamboat backend scaffold"
+  default_prompt: "Use $dreamboat-backend-creator to scaffold the Dreamboat backend from instruction.md."

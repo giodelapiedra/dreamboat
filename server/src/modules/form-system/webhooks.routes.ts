@@ -8,11 +8,19 @@ import { shopifyWebhookSchema } from "./form-system.schema";
 
 const router: ExpressRouter = Router();
 
+// Original endpoint (manual/structured payload)
 router.post(
   "/shopify",
   verifyShopifyWebhook,
   validate(shopifyWebhookSchema),
   asyncHandler(formSystemController.handleShopifyWebhook),
+);
+
+// Raw Shopify orders/paid webhook (auto-parses product title + variant)
+router.post(
+  "/shopify/raw",
+  verifyShopifyWebhook,
+  asyncHandler(formSystemController.handleShopifyRawWebhook),
 );
 
 export default router;

@@ -10,6 +10,8 @@ const router: ExpressRouter = Router();
 
 router.use(authenticate);
 router.get("/", asyncHandler(formSystemController.getSubmissionSummaries));
+router.get("/trips", asyncHandler(formSystemController.getTrips));
+router.get("/export", asyncHandler(formSystemController.exportSubmissions));
 router.get(
   "/:id",
   validate(submissionIdParamsSchema),

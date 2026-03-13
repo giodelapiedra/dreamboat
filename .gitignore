@@ -7,4 +7,6 @@ dist
 .env.*.local
 coverage
 .DS_Store
+*.log
+tmp-cookie.txt
 

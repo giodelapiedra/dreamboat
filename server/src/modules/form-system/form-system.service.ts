@@ -117,6 +117,7 @@ function mapSubmissionSummary(submission: SubmissionWithRelations) {
     updatedAt: submission.updatedAt.toISOString(),
     bookingReference: submission.bookingReference,
     shopifyOrderNumber: submission.shopifyOrderNumber,
+    confirmationToken: submission.confirmationToken,
     source: "api" as const,
   };
 }
@@ -191,8 +192,18 @@ async function getSubmissionByTokenOrThrow(token: string): Promise<SubmissionWit
   return submission;
 }
 
+function assertConfirmationIsAccessible(submission: SubmissionWithRelations): void {
+  if (submission.status === SubmissionStatus.COMPLETED) {
+    throw new HttpError(
+      StatusCodes.GONE,
+      "This confirmation link has already been completed and can no longer be used.",
+    );
+  }
+}
+
 export async function getConfirmationPayload(token: string) {
   const submission = await getSubmissionByTokenOrThrow(token);
+  assertConfirmationIsAccessible(submission);
 
   return {
     form: mapForm(submission.form),
@@ -207,10 +218,7 @@ export async function submitConfirmation(
   },
 ) {
   const existing = await getSubmissionByTokenOrThrow(token);
-
-  if (existing.status === SubmissionStatus.COMPLETED) {
-    throw new HttpError(StatusCodes.CONFLICT, "This confirmation has already been completed. Contact support if you need to make changes.");
-  }
+  assertConfirmationIsAccessible(existing);
 
   const mergedAnswers: AnswersRecord = {
     ...parseAnswers(existing.answers),
@@ -218,9 +226,16 @@ export async function submitConfirmation(
   };
   const steps = parseFormSteps(existing.form.steps);
   const progress = buildProgress(steps, mergedAnswers);
+  const now = new Date();
 
-  const submission = await prisma.submission.update({
-    where: { id: existing.id },
+  const updateResult = await prisma.submission.updateMany({
+    where: {
+      id: existing.id,
+      confirmationToken: token,
+      status: {
+        not: SubmissionStatus.COMPLETED,
+      },
+    },
     data: {
       guestName: deriveGuestName(mergedAnswers),
       guestEmail: deriveGuestEmail(mergedAnswers),
@@ -228,20 +243,31 @@ export async function submitConfirmation(
       status: progress.status,
       completionPercent: progress.completionPercent,
       missingCount: progress.missingCount,
-      timeline: {
-        create: {
-          title: "Guest response submitted",
-          description: "The confirmation form was updated from the public link.",
-          occurredAt: new Date(),
-        },
-      },
-    },
-    include: {
-      form: true,
-      timeline: true,
+      confirmationToken: progress.status === SubmissionStatus.COMPLETED ? null : token,
+      updatedAt: now,
     },
   });
 
+  if (updateResult.count === 0) {
+    throw new HttpError(
+      StatusCodes.GONE,
+      "This confirmation link has already been completed and can no longer be used.",
+    );
+  }
+
+  await prisma.submissionEvent.create({
+    data: {
+      submissionId: existing.id,
+      title: "Guest response submitted",
+      description:
+        progress.status === SubmissionStatus.COMPLETED
+          ? "The confirmation form was completed from the public link and the token was consumed."
+          : "The confirmation form was updated from the public link.",
+      occurredAt: now,
+    },
+  });
+
+  const submission = await getSubmissionByIdOrThrow(existing.id);
   return mapSubmissionDetail(submission);
 }
 
@@ -262,6 +288,62 @@ export async function getSubmissionSummaries() {
 export async function getSubmissionDetail(id: string) {
   const submission = await getSubmissionByIdOrThrow(id);
   return mapSubmissionDetail(submission);
+}
+
+export async function getTrips() {
+  const submissions = await prisma.submission.findMany({
+    select: {
+      propertyName: true,
+      checkIn: true,
+      checkOut: true,
+      status: true,
+      answers: true,
+    },
+    orderBy: { checkIn: "desc" },
+  });
+
+  // Group by propertyName + checkIn + checkOut
+  const groups = new Map<string, {
+    propertyName: string;
+    checkIn: string;
+    checkOut: string;
+    totalBookings: number;
+    totalGuests: number;
+    completedCount: number;
+  }>();
+
+  for (const sub of submissions) {
+    const key = `${sub.propertyName}|${sub.checkIn}|${sub.checkOut}`;
+    let group = groups.get(key);
+
+    if (!group) {
+      group = {
+        propertyName: sub.propertyName,
+        checkIn: sub.checkIn,
+        checkOut: sub.checkOut,
+        totalBookings: 0,
+        totalGuests: 0,
+        completedCount: 0,
+      };
+      groups.set(key, group);
+    }
+
+    group.totalBookings += 1;
+
+    const answers = answersRecordSchema.parse(sub.answers);
+    const companion = Number(String(answers.companion_count ?? "0"));
+    group.totalGuests += isNaN(companion) ? 1 : companion + 1;
+
+    if (sub.status === SubmissionStatus.COMPLETED) {
+      group.completedCount += 1;
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const dateA = new Date(a.checkIn).getTime();
+    const dateB = new Date(b.checkIn).getTime();
+    return dateB - dateA;
+  });
 }
 
 export async function handleShopifyWebhook(input: {
@@ -329,3 +411,4 @@ export async function handleShopifyWebhook(input: {
     confirmationUrl: `${env.CLIENT_URL}/confirm/${token}`,
   };
 }
+
