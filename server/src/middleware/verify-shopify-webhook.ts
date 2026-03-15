@@ -15,15 +15,24 @@ export function verifyShopifyWebhook(req: Request, res: Response, next: NextFunc
   const hmacHeader = req.headers["x-shopify-hmac-sha256"];
 
   if (typeof hmacHeader !== "string") {
-    res.status(StatusCodes.UNAUTHORIZED).json({ error: "Missing Shopify HMAC signature" });
+    const msg = "Missing Shopify HMAC signature";
+    res.status(StatusCodes.UNAUTHORIZED).json({ error: msg });
     return;
   }
 
-  const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-  const computedHmac = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
+  const raw = (req as any).rawBody;
+  const body = raw ?? JSON.stringify(req.body);
+  const computed = crypto
+    .createHmac("sha256", secret)
+    .update(body)
+    .digest("base64");
 
-  if (!crypto.timingSafeEqual(Buffer.from(hmacHeader), Buffer.from(computedHmac))) {
-    res.status(StatusCodes.UNAUTHORIZED).json({ error: "Invalid Shopify HMAC signature" });
+  const a = Buffer.from(hmacHeader);
+  const b = Buffer.from(computed);
+
+  if (!crypto.timingSafeEqual(a, b)) {
+    const msg = "Invalid Shopify HMAC signature";
+    res.status(StatusCodes.UNAUTHORIZED).json({ error: msg });
     return;
   }
 

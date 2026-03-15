@@ -14,6 +14,8 @@ import routes from "./routes";
 export function createApp(): express.Express {
   const app = express();
 
+  app.set("trust proxy", 1);
+
   app.use(
     cors({
       origin: env.CLIENT_URL,
@@ -26,7 +28,11 @@ export function createApp(): express.Express {
       logger,
     }),
   );
-  app.use(express.json());
+  app.use(express.json({
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf;
+    },
+  }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
   app.use(globalLimiter);

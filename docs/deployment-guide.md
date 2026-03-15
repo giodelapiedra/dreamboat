@@ -1,6 +1,8 @@
-# Dreamboat — Ubuntu VPS Deployment Guide
+# Dreamboat — Ubuntu VPS Deployment Guide (Backend Only)
 
-Complete guide to deploy Dreamboat (server + client) on an Ubuntu VPS with PostgreSQL, Nginx, and PM2.
+Complete guide to deploy the Dreamboat API server and PostgreSQL on an Ubuntu VPS with Nginx and PM2.
+
+> This guide covers **backend only** (server + database). The client/frontend is deployed separately.
 
 ---
 
@@ -19,43 +21,60 @@ Complete guide to deploy Dreamboat (server + client) on an Ubuntu VPS with Postg
 
 ## 1. System Setup
 
-Update the system and install core dependencies.
+**Step 1.1** — Update the system:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-### Install Node.js 22
+> If you see a "Newer kernel available" message, reboot first: `sudo reboot`, then reconnect via SSH and continue.
+
+**Step 1.2** — Install Node.js 22:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
+```
+
+**Step 1.3** — Verify Node.js:
+
+```bash
 node -v   # should print v22.x.x
 ```
 
-### Install pnpm
+**Step 1.4** — Install pnpm:
 
 ```bash
 npm install -g pnpm@10.17.1
+```
+
+**Step 1.5** — Verify pnpm:
+
+```bash
 pnpm -v   # should print 10.17.1
 ```
 
-### Install PostgreSQL
+**Step 1.6** — Install PostgreSQL:
 
 ```bash
 sudo apt install -y postgresql postgresql-contrib
+```
+
+**Step 1.7** — Enable and start PostgreSQL:
+
+```bash
 sudo systemctl enable postgresql
 sudo systemctl start postgresql
 ```
 
-### Install Nginx
+**Step 1.8** — Install Nginx:
 
 ```bash
 sudo apt install -y nginx
 sudo systemctl enable nginx
 ```
 
-### Install PM2 (process manager)
+**Step 1.9** — Install PM2 (process manager):
 
 ```bash
 npm install -g pm2
@@ -65,35 +84,84 @@ npm install -g pm2
 
 ## 2. Database Setup
 
-Create a PostgreSQL user and database.
+**Step 2.1** — Open the PostgreSQL prompt:
 
 ```bash
-sudo -u postgres psql
+cd /tmp && sudo -u postgres psql
 ```
 
-Run the following SQL inside the `psql` prompt:
+> We `cd /tmp` first to avoid a "could not change directory" warning.
+
+**Step 2.2** — Create the database user (run inside the `postgres=#` prompt):
 
 ```sql
 CREATE USER dreamboat WITH PASSWORD 'your_strong_db_password';
-CREATE DATABASE dreamboat OWNER dreamboat;
-GRANT ALL PRIVILEGES ON DATABASE dreamboat TO dreamboat;
-\q
 ```
 
 > Replace `your_strong_db_password` with a strong password. You will use this in the `DATABASE_URL` later.
 
+**Step 2.3** — Create the database:
+
+```sql
+CREATE DATABASE dreamboat OWNER dreamboat;
+```
+
+**Step 2.4** — Grant privileges:
+
+```sql
+GRANT ALL PRIVILEGES ON DATABASE dreamboat TO dreamboat;
+```
+
+**Step 2.5** — Exit the prompt:
+
+```sql
+\q
+```
+
 ---
 
-## 3. Clone the Repository
+## 3. Upload the Project
+
+**Step 3.1** — Navigate to the web directory:
 
 ```bash
 cd /var/www
-sudo git clone https://github.com/giodelapiedra/dreamboat.git
-sudo chown -R $USER:$USER dreamboat
-cd dreamboat
 ```
 
-Install all dependencies:
+**Step 3.2** — Create the project directory:
+
+```bash
+sudo mkdir -p dreamboat
+sudo chown -R $USER:$USER dreamboat
+```
+
+**Step 3.3** — Upload the following files/folders from your local machine to `/var/www/dreamboat/` on the VPS using SCP, SFTP, or your preferred method:
+
+```
+dreamboat/
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── server/          (entire folder)
+└── shared/          (entire folder)
+```
+
+> The `shared/` folder is required because the server depends on `@dreamboat/shared`.
+> Do NOT upload `node_modules/` — we will install dependencies on the VPS.
+
+**Example using SCP** (run from your local machine):
+
+```bash
+scp -r package.json pnpm-lock.yaml pnpm-workspace.yaml server/ shared/ root@YOUR_VPS_IP:/var/www/dreamboat/
+```
+
+**Step 3.4** — Enter the project directory on the VPS:
+
+```bash
+cd /var/www/dreamboat
+```
+
+**Step 3.5** — Install dependencies:
 
 ```bash
 pnpm install
@@ -103,9 +171,7 @@ pnpm install
 
 ## 4. Environment Configuration
 
-### Generate JWT secrets
-
-Run this twice to generate two separate secrets:
+**Step 4.1** — Generate JWT secrets. Run this command **twice** to get two separate secrets:
 
 ```bash
 openssl rand -hex 32
@@ -113,15 +179,13 @@ openssl rand -hex 32
 
 Save both outputs — one for `JWT_ACCESS_SECRET`, one for `JWT_REFRESH_SECRET`.
 
-### Server environment file
-
-Create `/var/www/dreamboat/server/.env`:
+**Step 4.2** — Create the server environment file:
 
 ```bash
 nano server/.env
 ```
 
-Paste the following (replace all placeholder values):
+**Step 4.3** — Paste the following into `server/.env` (replace all placeholder values):
 
 ```env
 # ── App ──
@@ -129,7 +193,7 @@ PORT=3000
 NODE_ENV=production
 
 # ── URLs ──
-# Set this to your actual domain or VPS IP
+# Set this to the URL where your frontend is hosted, or your VPS IP
 CLIENT_URL=https://yourdomain.com
 
 # ── Database ──
@@ -137,7 +201,7 @@ CLIENT_URL=https://yourdomain.com
 DATABASE_URL=postgresql://dreamboat:your_strong_db_password@localhost:5432/dreamboat
 
 # ── JWT Authentication ──
-# Paste the two secrets you generated above
+# Paste the two secrets you generated in Step 4.1
 JWT_ACCESS_SECRET=paste_first_64_char_secret_here
 JWT_REFRESH_SECRET=paste_second_64_char_secret_here
 JWT_ACCESS_EXPIRES_IN=15m
@@ -147,76 +211,81 @@ JWT_REFRESH_EXPIRES_IN=7d
 # SHOPIFY_WEBHOOK_SECRET=
 ```
 
-### Client environment file
-
-Create `/var/www/dreamboat/client/.env`:
-
-```bash
-nano client/.env
-```
-
-Paste the following:
-
-```env
-VITE_API_URL=https://yourdomain.com/api
-VITE_APP_NAME=Dreamboat
-VITE_ENABLE_FORM_FALLBACK=false
-```
-
-> If you don't have a domain yet, use your VPS IP instead:
-> `CLIENT_URL=http://YOUR_VPS_IP` and `VITE_API_URL=http://YOUR_VPS_IP/api`
-
 ---
 
 ## 5. Build the Project
 
-Run these commands in order from `/var/www/dreamboat`:
+Run all commands from `/var/www/dreamboat`.
+
+**Step 5.1** — Generate the Prisma client:
 
 ```bash
-# 1. Generate Prisma client
 pnpm db:generate
-
-# 2. Push database schema to PostgreSQL
-pnpm db:push
-
-# 3. Seed the database (creates admin account + sample data)
-cd server && pnpm db:seed && cd ..
-
-# 4. Build both client and server
-pnpm build
 ```
 
-### Verify the build
+**Step 5.2** — Push the database schema to PostgreSQL:
 
 ```bash
-# Server build output should exist
-ls server/dist/server.js
-
-# Client build output should exist
-ls client/dist/index.html
+pnpm db:push
 ```
+
+**Step 5.3** — Seed the database (creates admin account + sample data):
+
+```bash
+cd server && pnpm db:seed && cd ..
+```
+
+**Step 5.4** — Build shared and server packages:
+
+```bash
+pnpm --filter shared build && pnpm --filter server build
+```
+
+**Step 5.5** — Verify the build output exists:
+
+```bash
+ls server/dist/server.js
+```
+
+If the file is missing, re-run the build command in Step 5.4.
 
 ---
 
 ## 6. Start the Server with PM2
 
+**Step 6.1** — Start the API server:
+
 ```bash
-# Start the API server
-pm2 start server/dist/server.js --name dreamboat-api --cwd /var/www/dreamboat/server
+pm2 start dist/server.js --name dreamboat-api --cwd /var/www/dreamboat/server
+```
 
-# Verify it is running
+**Step 6.2** — Verify it is running:
+
+```bash
 pm2 status
+```
 
-# Quick health check
+You should see `dreamboat-api` with status `online`.
+
+**Step 6.3** — Quick health check:
+
+```bash
 curl http://localhost:3000/api/health
 ```
 
-Set PM2 to auto-start on reboot:
+You should get a JSON response back.
+
+**Step 6.4** — Set PM2 to auto-start on reboot:
 
 ```bash
 pm2 startup
-# Follow the printed command (copy-paste and run it)
+```
 
+**Step 6.5** — Copy and run the command that `pm2 startup` printed (it looks like `sudo env PATH=... pm2 startup ...`).
+
+**Step 6.6** — Save the current PM2 process list:
+
+```bash
 pm2 save
 ```
 
@@ -224,22 +293,18 @@ pm2 save
 
 ## 7. Configure Nginx
 
-### Create the Nginx config
+**Step 7.1** — Create the Nginx config file:
 
 ```bash
 sudo nano /etc/nginx/sites-available/dreamboat
 ```
 
-Paste the following configuration:
+**Step 7.2** — Paste the following configuration (replace `yourdomain.com` with your actual domain or VPS IP):
 
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com;
-
-    # ── Client (static files from Vite build) ──
-    root /var/www/dreamboat/client/dist;
-    index index.html;
 
     # ── API reverse proxy ──
     location /api/ {
@@ -254,32 +319,38 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    # ── Confirmation links (public, no auth) ──
-    location /confirm/ {
-        try_files $uri /index.html;
-    }
-
-    # ── SPA fallback (all other routes go to index.html) ──
+    # ── Default response for non-API routes ──
     location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # ── Cache static assets ──
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
+        return 404;
     }
 }
 ```
 
-> Replace `yourdomain.com` with your actual domain or VPS IP address.
+**Step 7.3** — Save and close the file (`Ctrl+O`, `Enter`, `Ctrl+X` in nano).
 
-### Enable the config
+**Step 7.4** — Enable the config by creating a symlink:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/dreamboat /etc/nginx/sites-enabled/
+```
+
+**Step 7.5** — Remove the default Nginx site:
+
+```bash
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t          # test config — should say "ok"
+```
+
+**Step 7.6** — Test the Nginx config:
+
+```bash
+sudo nginx -t
+```
+
+You should see `syntax is ok` and `test is successful`.
+
+**Step 7.7** — Restart Nginx:
+
+```bash
 sudo systemctl restart nginx
 ```
 
@@ -287,10 +358,17 @@ sudo systemctl restart nginx
 
 ## 8. SSL with Let's Encrypt (Recommended)
 
-If you have a domain name pointed to your VPS:
+> Skip this section if you don't have a domain name yet.
+
+**Step 8.1** — Install Certbot:
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
+```
+
+**Step 8.2** — Obtain an SSL certificate (replace `yourdomain.com`):
+
+```bash
 sudo certbot --nginx -d yourdomain.com
 ```
 
@@ -299,7 +377,7 @@ Certbot will automatically:
 - Update the Nginx config to use HTTPS
 - Set up auto-renewal
 
-Test auto-renewal:
+**Step 8.3** — Test auto-renewal:
 
 ```bash
 sudo certbot renew --dry-run
@@ -309,62 +387,88 @@ sudo certbot renew --dry-run
 
 ## 9. Firewall Setup
 
+**Step 9.1** — Allow SSH connections (so you don't lock yourself out):
+
 ```bash
 sudo ufw allow OpenSSH
+```
+
+**Step 9.2** — Allow Nginx traffic (HTTP + HTTPS):
+
+```bash
 sudo ufw allow 'Nginx Full'
+```
+
+**Step 9.3** — Enable the firewall:
+
+```bash
 sudo ufw enable
+```
+
+**Step 9.4** — Verify the rules:
+
+```bash
 sudo ufw status
 ```
+
+You should see OpenSSH and Nginx Full listed as ALLOW.
 
 ---
 
 ## 10. Verify Everything
 
-### Check all services
+**Step 10.1** — Check PM2 is running:
 
 ```bash
-# PM2 is running
 pm2 status
+```
 
-# Nginx is running
+`dreamboat-api` should show status `online`.
+
+**Step 10.2** — Check Nginx is running:
+
+```bash
 sudo systemctl status nginx
+```
 
-# PostgreSQL is running
+Should show `active (running)`.
+
+**Step 10.3** — Check PostgreSQL is running:
+
+```bash
 sudo systemctl status postgresql
 ```
 
-### Test the endpoints
+Should show `active (running)`.
+
+**Step 10.4** — Test the API health endpoint directly:
 
 ```bash
-# API health check
 curl http://localhost:3000/api/health
-
-# Client loads (via Nginx)
-curl -I http://yourdomain.com
 ```
 
-### Login credentials
+**Step 10.5** — Test the API through Nginx:
 
-After seeding, you can log in at `https://yourdomain.com/login` with:
+```bash
+curl http://yourdomain.com/api/health
+```
 
-| Field | Value |
-|-------|-------|
-| Email | `admin@dreamboat.local` |
-| Password | `Dreamboat123!` |
+Both should return a JSON response.
 
 ---
 
 ## Common Operations
 
-### Update to latest code
+### Update the server code
+
+Upload the updated `server/` and `shared/` folders to the VPS, then:
 
 ```bash
 cd /var/www/dreamboat
-git pull origin main
 pnpm install
 pnpm db:generate
 pnpm db:push
-pnpm build
+pnpm --filter shared build && pnpm --filter server build
 pm2 restart dreamboat-api
 ```
 
@@ -406,24 +510,35 @@ df -h
 
 ### API not responding
 
+**1.** Check if PM2 process is running:
+
 ```bash
-# Check if PM2 process is running
 pm2 status
+```
 
-# Check logs for errors
+**2.** Check logs for errors:
+
+```bash
 pm2 logs dreamboat-api --lines 50
+```
 
-# Make sure port 3000 is not used by something else
+**3.** Make sure port 3000 is not used by something else:
+
+```bash
 sudo lsof -i :3000
 ```
 
 ### Database connection error
 
-```bash
-# Check if PostgreSQL is running
-sudo systemctl status postgresql
+**1.** Check if PostgreSQL is running:
 
-# Test the connection manually
+```bash
+sudo systemctl status postgresql
+```
+
+**2.** Test the connection manually:
+
+```bash
 psql -U dreamboat -h localhost -d dreamboat
 ```
 
@@ -431,38 +546,30 @@ psql -U dreamboat -h localhost -d dreamboat
 
 This means Nginx cannot reach the API server.
 
+**1.** Make sure PM2 is running the server:
+
 ```bash
-# Make sure PM2 is running the server
 pm2 status
-
-# Check if the server is actually listening on port 3000
-curl http://localhost:3000/api/health
-
-# Check Nginx error logs
-sudo tail -20 /var/log/nginx/error.log
 ```
 
-### Client shows blank page
+**2.** Check if the server is actually listening on port 3000:
 
 ```bash
-# Check if the build output exists
-ls /var/www/dreamboat/client/dist/index.html
+curl http://localhost:3000/api/health
+```
 
-# Rebuild if needed
-cd /var/www/dreamboat && pnpm build
+**3.** Check Nginx error logs:
 
-# Check browser console for VITE_API_URL errors
-# Make sure client/.env has the correct API URL
+```bash
+sudo tail -20 /var/log/nginx/error.log
 ```
 
 ### Permission issues
 
-```bash
-# Fix ownership
-sudo chown -R $USER:$USER /var/www/dreamboat
+**1.** Fix ownership:
 
-# Nginx needs read access to client/dist
-sudo chmod -R 755 /var/www/dreamboat/client/dist
+```bash
+sudo chown -R $USER:$USER /var/www/dreamboat
 ```
 
 ---
@@ -470,20 +577,17 @@ sudo chmod -R 755 /var/www/dreamboat/client/dist
 ## Architecture Overview
 
 ```
-Browser
+Client (hosted separately)
   |
   v
 Nginx (:80/:443)
   |
   |-- /api/*  -->  PM2 / Node.js (:3000)  -->  PostgreSQL (:5432)
-  |
-  |-- /*      -->  client/dist/index.html (static SPA)
 ```
 
 | Component | Role |
 |-----------|------|
-| **Nginx** | Reverse proxy, serves static client files, handles SSL |
+| **Nginx** | Reverse proxy for the API, handles SSL |
 | **PM2** | Keeps the Node.js API server alive, auto-restarts on crash |
-| **Node.js** | Runs the Fastify/Express API server |
+| **Node.js** | Runs the Express API server |
 | **PostgreSQL** | Stores users, bookings, submissions, forms |
-| **Client (Vite)** | Pre-built static files served by Nginx |
