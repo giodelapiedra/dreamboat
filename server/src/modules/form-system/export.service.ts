@@ -75,6 +75,8 @@ export async function exportSubmissionsToExcel(filters: {
   wb.creator = "Dreamboat";
   wb.created = new Date();
 
+  const usedSheetNames = new Set<string>();
+
   for (const [key, groupSubs] of groups) {
     const parts = key.split("|");
     const propName = parts[0] ?? "Unknown";
@@ -89,8 +91,16 @@ export async function exportSubmissionsToExcel(filters: {
       totalGuests += guestCount(answers);
     }
 
-    // Sheet name (max 31 chars for Excel)
-    const sheetName = propName.slice(0, 31);
+    // Sheet name (max 31 chars for Excel, no invalid characters, must be unique)
+    let baseName = propName.replace(/[:\\/?*[\]]/g, "_").slice(0, 31);
+    let sheetName = baseName;
+    let suffix = 2;
+    while (usedSheetNames.has(sheetName)) {
+      const tag = ` (${suffix})`;
+      sheetName = baseName.slice(0, 31 - tag.length) + tag;
+      suffix++;
+    }
+    usedSheetNames.add(sheetName);
     const ws = wb.addWorksheet(sheetName);
 
     // Column widths (generous for readability)

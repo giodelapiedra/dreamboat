@@ -10,3 +10,5 @@ coverage
 *.log
 tmp-cookie.txt
 
+
+.vercel
