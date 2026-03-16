@@ -1,4 +1,7 @@
 {
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "buildCommand": "pnpm --filter @dreamboat/shared build && pnpm --filter client build",
+  "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "http://72.61.213.48/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
