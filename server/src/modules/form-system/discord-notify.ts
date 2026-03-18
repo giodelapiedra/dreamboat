@@ -15,21 +15,18 @@ interface BookingNotification {
 export async function notifyDiscordNewBooking(booking: BookingNotification): Promise<void> {
   if (!env.DISCORD_WEBHOOK_URL) return;
 
-  const embed = {
-    title: "New Booking Received",
-    color: 0x00b894,
-    fields: [
-      { name: "Guest", value: booking.guestName, inline: true },
-      { name: "Email", value: booking.guestEmail, inline: true },
-      { name: "Order", value: booking.shopifyOrderNumber, inline: true },
-      { name: "Property", value: booking.propertyName, inline: true },
-      { name: "Check-in", value: booking.checkIn, inline: true },
-      { name: "Check-out", value: booking.checkOut, inline: true },
-      { name: "Booking Ref", value: booking.bookingReference, inline: true },
-      { name: "Confirmation Link", value: booking.confirmationUrl },
-    ],
-    timestamp: new Date().toISOString(),
-  };
+  const message = [
+    `**🛳️ New Booking Received**`,
+    ``,
+    `**Guest:** ${booking.guestName}`,
+    `**Email:** ${booking.guestEmail}`,
+    `**Order:** ${booking.shopifyOrderNumber}`,
+    `**Property:** ${booking.propertyName}`,
+    `**Check-in:** ${booking.checkIn}`,
+    `**Check-out:** ${booking.checkOut}`,
+    `**Booking Ref:** ${booking.bookingReference}`,
+    `**Confirmation:** ${booking.confirmationUrl}`,
+  ].join("\n");
 
   try {
     const response = await fetch(env.DISCORD_WEBHOOK_URL, {
@@ -37,7 +34,7 @@ export async function notifyDiscordNewBooking(booking: BookingNotification): Pro
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "Dreamboat",
-        embeds: [embed],
+        content: message,
       }),
     });
 
