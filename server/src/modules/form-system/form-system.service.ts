@@ -5,6 +5,7 @@ import { HttpError } from "../../lib/http-error";
 import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 import { answersRecordSchema, formStepsSchema } from "./form-system.schema";
+import { notifyDiscordNewBooking } from "./discord-notify";
 
 type FormWithSubmissions = Form;
 type SubmissionWithRelations = Submission & {
@@ -405,10 +406,24 @@ export async function handleShopifyWebhook(input: {
     },
   });
 
+  const confirmationUrl = `${env.CLIENT_URL}/confirm/${token}`;
+
+  // Fire-and-forget: don't block the webhook response
+  notifyDiscordNewBooking({
+    guestName: submission.guestName,
+    guestEmail: submission.guestEmail,
+    propertyName: input.propertyName,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    shopifyOrderNumber: input.shopifyOrderNumber,
+    bookingReference,
+    confirmationUrl,
+  }).catch(() => {});
+
   return {
     submissionId: submission.id,
     confirmationToken: token,
-    confirmationUrl: `${env.CLIENT_URL}/confirm/${token}`,
+    confirmationUrl,
   };
 }
 

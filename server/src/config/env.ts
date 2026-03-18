@@ -12,6 +12,7 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().min(2).default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().min(2).default("7d"),
   SHOPIFY_WEBHOOK_SECRET: z.string().min(1).optional(),
+  DISCORD_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);
