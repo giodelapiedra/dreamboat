@@ -58,14 +58,53 @@ export async function submitConfirmation(
   return submissionDetailSchema.parse(response.data.data);
 }
 
-export async function getSubmissionSummaries(): Promise<SubmissionSummary[]> {
+export interface SubmissionListParams {
+  page?: number;
+  pageSize?: number;
+  statusGroup?: "active" | "completed";
+  status?: string;
+  search?: string;
+  sort?: string;
+  dir?: string;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export async function getSubmissionSummaries(
+  params: SubmissionListParams = {},
+): Promise<PaginatedResult<SubmissionSummary>> {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") searchParams.set(key, String(value));
+  }
+  const query = searchParams.toString();
+
   return resolveWithFallback(
     async () => {
-      const response = await apiClient.get<ApiSuccessResponse<unknown>>("/submissions");
-      return submissionSummarySchema.array().parse(response.data.data);
+      const response = await apiClient.get<ApiSuccessResponse<unknown>>(
+        `/submissions${query ? `?${query}` : ""}`,
+      );
+      return {
+        data: submissionSummarySchema.array().parse(response.data.data),
+        meta: response.data.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 },
+      };
     },
-    () => listMockSubmissionSummaries(),
+    () => {
+      const all = listMockSubmissionSummaries();
+      return { data: all, meta: { page: 1, limit: all.length, total: all.length, totalPages: 1 } };
+    },
   );
+}
+
+export async function getSubmissionCounts(
+  statusGroup?: "active" | "completed",
+): Promise<Record<string, number>> {
+  const query = statusGroup ? `?statusGroup=${statusGroup}` : "";
+  const response = await apiClient.get<ApiSuccessResponse<unknown>>(`/submissions/counts${query}`);
+  return response.data.data as Record<string, number>;
 }
 
 export interface Trip {

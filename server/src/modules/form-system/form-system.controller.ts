@@ -16,9 +16,24 @@ export async function submitConfirmation(req: Request, res: Response): Promise<v
   res.json(successResponse(submission));
 }
 
-export async function getSubmissionSummaries(_req: Request, res: Response): Promise<void> {
-  const submissions = await formSystemService.getSubmissionSummaries();
-  res.json(successResponse(submissions));
+export async function getSubmissionSummaries(req: Request, res: Response): Promise<void> {
+  const query = req.query as unknown as {
+    page: number;
+    pageSize: number;
+    statusGroup?: "active" | "completed";
+    status?: Parameters<typeof formSystemService.getSubmissionSummaries>[0]["status"];
+    search?: string;
+    sort: string;
+    dir: "asc" | "desc";
+  };
+  const result = await formSystemService.getSubmissionSummaries(query);
+  res.json(successResponse(result.data, result.meta));
+}
+
+export async function getSubmissionCounts(req: Request, res: Response): Promise<void> {
+  const statusGroup = req.query.statusGroup as "active" | "completed" | undefined;
+  const counts = await formSystemService.getSubmissionCounts(statusGroup);
+  res.json(successResponse(counts));
 }
 
 export async function getSubmissionDetail(req: Request, res: Response): Promise<void> {

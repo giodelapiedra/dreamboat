@@ -48,6 +48,18 @@ export const submitConfirmationSchema = z.object({
   }),
 });
 
+export const submissionListQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).default(10),
+    statusGroup: z.enum(["active", "completed"]).optional(),
+    status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "NEEDS_REVIEW"]).optional(),
+    search: z.string().optional(),
+    sort: z.enum(["updatedAt", "guestName", "completionPercent", "bookingReference"]).default("updatedAt"),
+    dir: z.enum(["asc", "desc"]).default("desc"),
+  }),
+});
+
 export const shopifyWebhookSchema = z.object({
   body: z.object({
     formSlug: z.string().trim().min(1).default("guest-confirmation"),

@@ -33,7 +33,7 @@ export async function notifyDiscordNewBooking(booking: BookingNotification): Pro
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: "Dreamboat",
+        username: "Big Dream Boatman",
         content: message,
       }),
     });

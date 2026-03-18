@@ -12,12 +12,11 @@ import {
   DataTableSortButton,
   type DataTableColumn,
 } from "@/components/ui/data-table";
-import { SubmissionStatusBadge } from "@/features/form-system/components/submission-status-badge";
-import { getSubmissionSummaries, getSubmissionCounts } from "@/features/form-system/form-system-api";
+import { getSubmissionSummaries } from "@/features/form-system/form-system-api";
 import type { SubmissionSummary } from "@/features/form-system/form-system-types";
 import { formatDate } from "@/lib/utils/format";
 
-type SortKey = "updatedAt" | "guestName" | "completionPercent" | "bookingReference";
+type SortKey = "updatedAt" | "guestName" | "bookingReference";
 type SortDirection = "asc" | "desc";
 
 function parsePage(value: string | null): number {
@@ -31,7 +30,7 @@ function parsePageSize(value: string | null): number {
 }
 
 function parseSortKey(value: string | null): SortKey {
-  if (value === "guestName" || value === "completionPercent" || value === "bookingReference") return value;
+  if (value === "guestName" || value === "bookingReference") return value;
   return "updatedAt";
 }
 
@@ -39,11 +38,10 @@ function parseSortDir(value: string | null): SortDirection {
   return value === "asc" ? "asc" : "desc";
 }
 
-export default function DashboardPage(): React.JSX.Element {
+export default function HistoryPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const search = searchParams.get("q") ?? "";
-  const statusFilter = searchParams.get("status") ?? "";
   const page = parsePage(searchParams.get("page"));
   const pageSize = parsePageSize(searchParams.get("pageSize"));
   const sort = parseSortKey(searchParams.get("sort"));
@@ -52,8 +50,7 @@ export default function DashboardPage(): React.JSX.Element {
   const queryParams = {
     page,
     pageSize,
-    statusGroup: "active" as const,
-    status: statusFilter || undefined,
+    statusGroup: "completed" as const,
     search: search || undefined,
     sort,
     dir,
@@ -64,17 +61,7 @@ export default function DashboardPage(): React.JSX.Element {
     queryFn: () => getSubmissionSummaries(queryParams),
   });
 
-  const countsQuery = useQuery({
-    queryKey: ["submission-counts", "active"],
-    queryFn: () => getSubmissionCounts("active"),
-  });
-
   const result = submissionsQuery.data;
-  const counts = countsQuery.data ?? {};
-  const totalActive = counts.total ?? 0;
-  const pendingCount = counts.PENDING ?? 0;
-  const inProgressCount = counts.IN_PROGRESS ?? 0;
-  const needsReviewCount = counts.NEEDS_REVIEW ?? 0;
 
   function updateParams(updates: Record<string, string | null>): void {
     const next = new URLSearchParams(searchParams);
@@ -94,14 +81,7 @@ export default function DashboardPage(): React.JSX.Element {
     });
   }
 
-  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "";
-
-  const statusTabs = [
-    { value: "", label: "All active", count: totalActive },
-    { value: "PENDING", label: "Pending", count: pendingCount },
-    { value: "IN_PROGRESS", label: "In progress", count: inProgressCount },
-    { value: "NEEDS_REVIEW", label: "Needs review", count: needsReviewCount },
-  ];
+  const hasSearch = search.trim().length > 0;
 
   const columns: DataTableColumn<SubmissionSummary>[] = [
     {
@@ -118,39 +98,6 @@ export default function DashboardPage(): React.JSX.Element {
           <span className="text-xs text-muted-foreground">{submission.bookingReference}</span>
         </div>
       ),
-    },
-    {
-      id: "confirmLink",
-      width: "120px",
-      header: "Confirm link",
-      renderCell: (submission) =>
-        submission.confirmationToken ? (
-          <a
-            className="confirm-link-btn"
-            href={`/confirm/${submission.confirmationToken}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open guest confirmation form"
-          >
-            <svg className="confirm-link-btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-              <path d="M11 3h6v6M17 3L9 11M8 5H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Open link
-          </a>
-        ) : (
-          <span className="confirm-done-badge">
-            <svg className="confirm-done-badge__icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
-            Complete
-          </span>
-        ),
-    },
-    {
-      id: "status",
-      width: "140px",
-      header: "Status",
-      renderCell: (submission) => <SubmissionStatusBadge status={submission.status} />,
     },
     {
       id: "date",
@@ -184,29 +131,6 @@ export default function DashboardPage(): React.JSX.Element {
       ),
     },
     {
-      id: "completion",
-      width: "180px",
-      header: (
-        <DataTableSortButton active={sort === "completionPercent"} direction={dir} onClick={() => updateSort("completionPercent")}>
-          Completion
-        </DataTableSortButton>
-      ),
-      renderCell: (submission) => (
-        <div className="flex items-center gap-2 w-full max-w-[140px]">
-          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${submission.completionPercent}%`,
-                backgroundColor: "var(--primary)",
-              }}
-            />
-          </div>
-          <span className="text-xs font-medium text-muted-foreground w-8 text-right">{submission.completionPercent}%</span>
-        </div>
-      ),
-    },
-    {
       id: "actions",
       width: "100px",
       align: "right",
@@ -225,46 +149,18 @@ export default function DashboardPage(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-semibold text-slate-900">Active Bookings</h1>
-        <Button variant="secondary" onClick={() => { submissionsQuery.refetch(); countsQuery.refetch(); }}>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">History</h1>
+          <p className="text-sm text-muted-foreground mt-1">{result ? `${result.meta.total} completed` : "Loading..."}</p>
+        </div>
+        <Button variant="secondary" onClick={() => submissionsQuery.refetch()}>
           Refresh
         </Button>
       </div>
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-4 stats-bar">
-        <article className="stat-card">
-          <div className="stat-card__label">Pending</div>
-          <div className="stat-card__value">{pendingCount}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-card__label">In progress</div>
-          <div className="stat-card__value">{inProgressCount}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-card__label">Needs review</div>
-          <div className="stat-card__value">{needsReviewCount}</div>
-        </article>
-      </div>
-
       {submissionsQuery.error ? <ErrorAlert message={String(submissionsQuery.error.message)} /> : null}
 
-      {/* Table section */}
       <section className="surface-card table-panel">
-        {/* Status tabs */}
-        <div className="status-tabs">
-          {statusTabs.map((tab) => (
-            <button
-              key={tab.value}
-              className={`status-tab ${statusFilter === tab.value ? "status-tab--active" : ""}`}
-              onClick={() => updateParams({ status: tab.value || null, page: null })}
-            >
-              {tab.label}
-              <span className="status-tab__count">{tab.count}</span>
-            </button>
-          ))}
-        </div>
-
         {/* Search bar */}
         <div className="table-toolbar">
           <div className="flex items-center gap-3 flex-1">
@@ -283,16 +179,16 @@ export default function DashboardPage(): React.JSX.Element {
               />
             </div>
 
-            {hasActiveFilters && (
-              <Button variant="ghost" onClick={() => updateParams({ q: null, status: null, page: null })}>
-                Clear filters
+            {hasSearch && (
+              <Button variant="ghost" onClick={() => updateParams({ q: null, page: null })}>
+                Clear search
               </Button>
             )}
           </div>
         </div>
 
         {submissionsQuery.isLoading ? (
-          <DataTableSkeleton columns={6} rows={8} />
+          <DataTableSkeleton columns={4} rows={8} />
         ) : (
           <>
             <DataTable
@@ -300,15 +196,15 @@ export default function DashboardPage(): React.JSX.Element {
               rows={result?.data ?? []}
               getRowKey={(submission) => submission.id}
               emptyState={
-                !hasActiveFilters ? (
-                  <DataTableEmptyState title="No active bookings" message="All bookings are completed. Check the History page." />
+                !hasSearch ? (
+                  <DataTableEmptyState title="No completed bookings yet" message="Completed confirmations will appear here." />
                 ) : (
                   <DataTableEmptyState
                     title="No matching records"
-                    message="Adjust your filters or search query."
+                    message="Adjust your search query."
                     action={
-                      <Button variant="secondary" onClick={() => updateParams({ q: null, status: null, page: null })}>
-                        Clear filters
+                      <Button variant="secondary" onClick={() => updateParams({ q: null, page: null })}>
+                        Clear search
                       </Button>
                     }
                   />
@@ -322,7 +218,7 @@ export default function DashboardPage(): React.JSX.Element {
                 pageCount={result.meta.totalPages}
                 pageSize={result.meta.limit}
                 totalItems={result.meta.total}
-                itemLabel="bookings"
+                itemLabel="records"
                 onPageChange={(nextPage) => updateParams({ page: nextPage <= 1 ? null : String(nextPage) })}
                 onPageSizeChange={(value) => updateParams({ pageSize: value === 10 ? null : String(value), page: null })}
                 pageSizeOptions={[10, 20, 50]}

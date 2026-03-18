@@ -272,18 +272,83 @@ export async function submitConfirmation(
   return mapSubmissionDetail(submission);
 }
 
-export async function getSubmissionSummaries() {
-  const submissions = await prisma.submission.findMany({
-    include: {
-      form: true,
-      timeline: true,
+export async function getSubmissionSummaries(params: {
+  page: number;
+  pageSize: number;
+  statusGroup?: "active" | "completed";
+  status?: SubmissionStatus | undefined;
+  search?: string | undefined;
+  sort: string;
+  dir: "asc" | "desc";
+}) {
+  const where: Prisma.SubmissionWhereInput = {};
+
+  if (params.statusGroup === "active") {
+    where.status = { in: [SubmissionStatus.PENDING, SubmissionStatus.IN_PROGRESS, SubmissionStatus.NEEDS_REVIEW] };
+  } else if (params.statusGroup === "completed") {
+    where.status = SubmissionStatus.COMPLETED;
+  }
+
+  if (params.status) {
+    where.status = params.status;
+  }
+
+  if (params.search?.trim()) {
+    const q = params.search.trim();
+    where.OR = [
+      { guestName: { contains: q, mode: "insensitive" } },
+      { guestEmail: { contains: q, mode: "insensitive" } },
+      { bookingReference: { contains: q, mode: "insensitive" } },
+      { shopifyOrderNumber: { contains: q, mode: "insensitive" } },
+    ];
+  }
+
+  const [submissions, total] = await Promise.all([
+    prisma.submission.findMany({
+      where,
+      include: { form: true, timeline: true },
+      orderBy: { [params.sort]: params.dir },
+      skip: (params.page - 1) * params.pageSize,
+      take: params.pageSize,
+    }),
+    prisma.submission.count({ where }),
+  ]);
+
+  return {
+    data: submissions.map(mapSubmissionSummary),
+    meta: {
+      page: params.page,
+      limit: params.pageSize,
+      total,
+      totalPages: Math.ceil(total / params.pageSize) || 1,
     },
-    orderBy: {
-      updatedAt: "desc",
-    },
+  };
+}
+
+export async function getSubmissionCounts(statusGroup?: "active" | "completed") {
+  const baseWhere: Prisma.SubmissionWhereInput = {};
+
+  if (statusGroup === "active") {
+    baseWhere.status = { in: [SubmissionStatus.PENDING, SubmissionStatus.IN_PROGRESS, SubmissionStatus.NEEDS_REVIEW] };
+  } else if (statusGroup === "completed") {
+    baseWhere.status = SubmissionStatus.COMPLETED;
+  }
+
+  const counts = await prisma.submission.groupBy({
+    by: ["status"],
+    where: baseWhere,
+    _count: true,
   });
 
-  return submissions.map(mapSubmissionSummary);
+  const result: Record<string, number> = {};
+  let total = 0;
+  for (const c of counts) {
+    result[c.status] = c._count;
+    total += c._count;
+  }
+  result.total = total;
+
+  return result;
 }
 
 export async function getSubmissionDetail(id: string) {

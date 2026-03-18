@@ -16,7 +16,7 @@ export function AuthFormShell({
       <aside className="auth-split__hero">
         <div className="auth-split__hero-overlay" />
         <div className="auth-split__hero-content">
-          <h1 className="auth-split__brand">Dreamboat</h1>
+          <h1 className="auth-split__brand">Big Dream Boatman</h1>
           <p className="auth-split__tagline">
             Your booking confirmation workspace — built for teams managing
             Shopify-created bookings and guest details.

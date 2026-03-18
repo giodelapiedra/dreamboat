@@ -37,6 +37,17 @@ const sidebarLinks = [
     ),
     end: false,
   },
+  {
+    to: "/dashboard/history",
+    label: "History",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    ),
+    end: false,
+  },
 ];
 
 function HamburgerIcon(): React.JSX.Element {
@@ -102,10 +113,9 @@ export function DashboardShell(): React.JSX.Element {
       <aside className={cn("dashboard-sidebar", sidebarOpen && "is-open")}>
         <div className="dashboard-sidebar__header">
           <Link className="brand-mark" to="/">
-            <span className="brand-mark__glyph">D</span>
+            <span className="brand-mark__glyph">B</span>
             <span>
               <strong>{env.APP_NAME}</strong>
-              <small>Workspace</small>
             </span>
           </Link>
           <button
@@ -188,15 +198,19 @@ export function DashboardShell(): React.JSX.Element {
 
 function getBreadcrumb(pathname: string): string {
   if (pathname.startsWith("/dashboard/submissions/")) {
-    return "Dashboard / Submission detail";
+    return "Submission Detail";
+  }
+
+  if (pathname === "/dashboard/history") {
+    return "History";
   }
 
   if (pathname === "/dashboard/trips") {
-    return "Dashboard / Trips";
+    return "Trips";
   }
 
   if (pathname === "/dashboard") {
-    return "Dashboard / Overview";
+    return "Overview";
   }
 
   return "Dashboard";

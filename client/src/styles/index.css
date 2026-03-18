@@ -267,7 +267,7 @@ small {
 }
 
 .dashboard-sidebar {
-  width: 240px;
+  width: 200px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -410,7 +410,7 @@ small {
 
 .dashboard-content {
   flex: 1;
-  margin-left: 240px;
+  margin-left: 200px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -446,9 +446,7 @@ small {
 
 .dashboard-main {
   padding: 2rem;
-  max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
 }
 
 .dashboard-overlay {
@@ -466,6 +464,54 @@ small {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+}
+
+.status-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem;
+}
+
+.status-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.status-tab:hover {
+  color: var(--text);
+}
+
+.status-tab--active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.status-tab__count {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: var(--border);
+  color: var(--text-muted);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 9999px;
+  min-width: 1.25rem;
+  text-align: center;
+}
+
+.status-tab--active .status-tab__count {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
 }
 
 .table-toolbar {
@@ -744,30 +790,41 @@ small {
 @media (max-width: 1024px) {
   .dashboard-sidebar {
     transform: translateX(-100%);
+    width: 260px;
   }
-  
+
   .dashboard-sidebar.is-open {
     transform: translateX(0);
   }
-  
+
   .dashboard-content {
     margin-left: 0;
   }
-  
+
   .dashboard-topbar__toggle {
     display: block;
   }
-  
+
   .dashboard-sidebar__close {
     display: block;
   }
-  
+
   .dashboard-overlay {
     display: block;
   }
-  
+
   .stats-bar {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .status-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .status-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 
@@ -801,6 +858,45 @@ small {
   
   .dashboard-main {
     padding: 1rem;
+  }
+
+  .dashboard-main h1 {
+    font-size: 1.25rem;
+  }
+
+  .dashboard-topbar {
+    padding: 0 1rem;
+    height: 52px;
+  }
+
+  .dashboard-breadcrumb {
+    font-size: 0.75rem;
+  }
+
+  .status-tabs {
+    padding: 0 1rem;
+  }
+
+  .status-tab {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .table-panel {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .stat-card {
+    padding: 0.75rem 1rem;
+  }
+
+  .stat-card__value {
+    font-size: 1.25rem;
+  }
+
+  .stat-card__label {
+    font-size: 0.6875rem;
   }
 }
 

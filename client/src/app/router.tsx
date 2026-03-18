@@ -11,6 +11,7 @@ const ConfirmationPage = lazy(() => import("@/pages/confirmation-page"));
 const LoginPage = lazy(() => import("@/pages/login-page"));
 const RegisterPage = lazy(() => import("@/pages/register-page"));
 const DashboardPage = lazy(() => import("@/pages/dashboard-page"));
+const HistoryPage = lazy(() => import("@/pages/history-page"));
 const TripsPage = lazy(() => import("@/pages/trips-page"));
 const SubmissionDetailPage = lazy(() => import("@/pages/submission-detail-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
@@ -51,6 +52,10 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: withSuspense(<DashboardPage />),
+          },
+          {
+            path: "history",
+            element: withSuspense(<HistoryPage />),
           },
           {
             path: "trips",

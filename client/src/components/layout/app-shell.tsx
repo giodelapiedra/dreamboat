@@ -33,7 +33,7 @@ export function AppShell(): React.JSX.Element {
       <header className="site-header">
         <div className="container site-header__inner">
           <Link className="brand-mark" to="/">
-            <span className="brand-mark__glyph">D</span>
+            <span className="brand-mark__glyph">B</span>
             <span>
               <strong>{env.APP_NAME}</strong>
               <small>Guest confirmation workspace</small>

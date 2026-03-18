@@ -72,7 +72,7 @@ export async function exportSubmissionsToExcel(filters: {
   }
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Dreamboat";
+  wb.creator = "Big Dream Boatman";
   wb.created = new Date();
 
   const usedSheetNames = new Set<string>();
