@@ -95,7 +95,13 @@ function buildSpreadsheetFileName(sheet: GuestListSheet): string {
   return rawName.replace(/[<>:"/\\|?*]/g, "_").slice(0, 180) || "Guest List";
 }
 
-function buildSheetValues(sheet: GuestListSheet): Array<Array<string | number>> {
+interface BuiltSheetValues {
+  values: Array<Array<string | number>>;
+  companionRowIndexes: number[];
+  separatorRowIndexes: number[];
+}
+
+function buildSheetValues(sheet: GuestListSheet): BuiltSheetValues {
   const totalCols = sheet.headers.length;
   const row2 = new Array<string | number>(totalCols).fill("");
   row2[0] = sheet.propertyName.toUpperCase();
@@ -103,21 +109,34 @@ function buildSheetValues(sheet: GuestListSheet): Array<Array<string | number>> 
   row2[16] = sheet.totalGuests;
 
   const rows: Array<Array<string | number>> = [[sheet.title], row2, [...sheet.headers]];
+  const companionRowIndexes: number[] = [];
+  const separatorRowIndexes: number[] = [];
 
   let bookingIndex = 0;
   for (const booking of sheet.bookings) {
     if (bookingIndex > 0) {
+      separatorRowIndexes.push(rows.length);
       rows.push(new Array<string | number>(totalCols).fill(""));
     }
 
     for (const guestRow of booking.rows) {
-      rows.push([...guestRow.values]);
+      const rowValues = [...guestRow.values];
+      if (guestRow.isCompanion) {
+        companionRowIndexes.push(rows.length);
+        rowValues[0] = rowValues[0] ? `Companion: ${rowValues[0]}` : "Companion";
+      }
+
+      rows.push(rowValues);
     }
 
     bookingIndex++;
   }
 
-  return rows;
+  return {
+    values: rows,
+    companionRowIndexes,
+    separatorRowIndexes,
+  };
 }
 
 async function findSpreadsheetInFolder(
@@ -237,7 +256,12 @@ async function writeWorksheetValues(accessToken: string, spreadsheetId: string, 
   );
 }
 
-function buildFormattingRequests(sheetId: number, rowCount: number, columnWidths: number[]): Array<Record<string, unknown>> {
+function buildFormattingRequests(
+  sheetId: number,
+  rowCount: number,
+  columnWidths: number[],
+  builtValues: BuiltSheetValues,
+): Array<Record<string, unknown>> {
   const requests: Array<Record<string, unknown>> = [
     {
       updateSheetProperties: {
@@ -391,7 +415,136 @@ function buildFormattingRequests(sheetId: number, rowCount: number, columnWidths
         fields: "userEnteredFormat(verticalAlignment,wrapStrategy,textFormat)",
       },
     },
+    {
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: 0,
+          endIndex: 1,
+        },
+        properties: {
+          pixelSize: 38,
+        },
+        fields: "pixelSize",
+      },
+    },
+    {
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: 1,
+          endIndex: 2,
+        },
+        properties: {
+          pixelSize: 44,
+        },
+        fields: "pixelSize",
+      },
+    },
+    {
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: 2,
+          endIndex: 3,
+        },
+        properties: {
+          pixelSize: 38,
+        },
+        fields: "pixelSize",
+      },
+    },
   ];
+
+  for (let rowIndex = 3; rowIndex < rowCount; rowIndex++) {
+    requests.push({
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: rowIndex,
+          endIndex: rowIndex + 1,
+        },
+        properties: {
+          pixelSize: builtValues.separatorRowIndexes.includes(rowIndex) ? 6 : 30,
+        },
+        fields: "pixelSize",
+      },
+    });
+  }
+
+  for (const separatorRowIndex of builtValues.separatorRowIndexes) {
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: separatorRowIndex,
+          endRowIndex: separatorRowIndex + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 18,
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: { red: 0.91, green: 0.91, blue: 0.91 },
+            borders: {
+              top: {
+                style: "SOLID",
+                color: { red: 0.74, green: 0.74, blue: 0.74 },
+              },
+              bottom: {
+                style: "SOLID",
+                color: { red: 0.74, green: 0.74, blue: 0.74 },
+              },
+            },
+          },
+        },
+        fields: "userEnteredFormat(backgroundColor,borders)",
+      },
+    });
+  }
+
+  for (const companionRowIndex of builtValues.companionRowIndexes) {
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: companionRowIndex,
+          endRowIndex: companionRowIndex + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 18,
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: { red: 0.96, green: 0.96, blue: 0.96 },
+          },
+        },
+        fields: "userEnteredFormat.backgroundColor",
+      },
+    });
+
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: companionRowIndex,
+          endRowIndex: companionRowIndex + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            textFormat: {
+              italic: true,
+            },
+          },
+        },
+        fields: "userEnteredFormat.textFormat.italic",
+      },
+    });
+  }
 
   columnWidths.forEach((width, index) => {
     requests.push({
@@ -417,7 +570,7 @@ async function formatWorksheet(
   accessToken: string,
   spreadsheetId: string,
   sheetId: number,
-  rowCount: number,
+  builtValues: BuiltSheetValues,
   columnWidths: number[],
 ): Promise<void> {
   await sheetsRequest<Record<string, unknown>>(
@@ -426,7 +579,7 @@ async function formatWorksheet(
     {
       method: "POST",
       body: JSON.stringify({
-        requests: buildFormattingRequests(sheetId, rowCount, columnWidths),
+        requests: buildFormattingRequests(sheetId, builtValues.values.length, columnWidths, builtValues),
       }),
     },
   );
@@ -440,11 +593,11 @@ async function syncGuestListFile(
   const fileName = buildSpreadsheetFileName(sheet);
   const spreadsheet = await getOrCreateSpreadsheet(accessToken, config.driveFolderId, fileName);
   const sheetId = await ensureWorksheet(accessToken, spreadsheet.id);
-  const values = buildSheetValues(sheet);
+  const builtValues = buildSheetValues(sheet);
 
   await clearWorksheet(accessToken, spreadsheet.id);
-  await writeWorksheetValues(accessToken, spreadsheet.id, values);
-  await formatWorksheet(accessToken, spreadsheet.id, sheetId, values.length, sheet.columnWidths);
+  await writeWorksheetValues(accessToken, spreadsheet.id, builtValues.values);
+  await formatWorksheet(accessToken, spreadsheet.id, sheetId, builtValues, sheet.columnWidths);
 
   return {
     spreadsheetId: spreadsheet.id,
