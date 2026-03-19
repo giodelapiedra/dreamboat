@@ -6,6 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 import { answersRecordSchema, formStepsSchema } from "./form-system.schema";
 import { notifyDiscordNewBooking } from "./discord-notify";
+import { syncTripGuestListToGoogleSheet } from "./google-sheets.service";
 
 type FormWithSubmissions = Form;
 type SubmissionWithRelations = Submission & {
@@ -269,6 +270,13 @@ export async function submitConfirmation(
   });
 
   const submission = await getSubmissionByIdOrThrow(existing.id);
+
+  void syncTripGuestListToGoogleSheet({
+    propertyName: submission.propertyName,
+    checkIn: submission.checkIn,
+    checkOut: submission.checkOut,
+  });
+
   return mapSubmissionDetail(submission);
 }
 
@@ -357,59 +365,42 @@ export async function getSubmissionDetail(id: string) {
 }
 
 export async function getTrips() {
-  const submissions = await prisma.submission.findMany({
-    select: {
-      propertyName: true,
-      checkIn: true,
-      checkOut: true,
-      status: true,
-      answers: true,
-    },
-    orderBy: { checkIn: "desc" },
-  });
+  const rows = await prisma.$queryRaw<
+    Array<{
+      propertyName: string;
+      checkIn: string;
+      checkOut: string;
+      totalBookings: bigint;
+      completedCount: bigint;
+      totalGuests: bigint;
+    }>
+  >`
+    SELECT
+      "propertyName",
+      "checkIn",
+      "checkOut",
+      COUNT(*)::bigint                                          AS "totalBookings",
+      COUNT(*) FILTER (WHERE status = 'COMPLETED')::bigint      AS "completedCount",
+      SUM(
+        CASE
+          WHEN answers->>'companion_count' ~ '^\d+$'
+          THEN (answers->>'companion_count')::int + 1
+          ELSE 1
+        END
+      )::bigint                                                 AS "totalGuests"
+    FROM "Submission"
+    GROUP BY "propertyName", "checkIn", "checkOut"
+    ORDER BY "checkIn" DESC
+  `;
 
-  // Group by propertyName + checkIn + checkOut
-  const groups = new Map<string, {
-    propertyName: string;
-    checkIn: string;
-    checkOut: string;
-    totalBookings: number;
-    totalGuests: number;
-    completedCount: number;
-  }>();
-
-  for (const sub of submissions) {
-    const key = `${sub.propertyName}|${sub.checkIn}|${sub.checkOut}`;
-    let group = groups.get(key);
-
-    if (!group) {
-      group = {
-        propertyName: sub.propertyName,
-        checkIn: sub.checkIn,
-        checkOut: sub.checkOut,
-        totalBookings: 0,
-        totalGuests: 0,
-        completedCount: 0,
-      };
-      groups.set(key, group);
-    }
-
-    group.totalBookings += 1;
-
-    const answers = answersRecordSchema.parse(sub.answers);
-    const companion = Number(String(answers.companion_count ?? "0"));
-    group.totalGuests += isNaN(companion) ? 1 : companion + 1;
-
-    if (sub.status === SubmissionStatus.COMPLETED) {
-      group.completedCount += 1;
-    }
-  }
-
-  return Array.from(groups.values()).sort((a, b) => {
-    const dateA = new Date(a.checkIn).getTime();
-    const dateB = new Date(b.checkIn).getTime();
-    return dateB - dateA;
-  });
+  return rows.map((row) => ({
+    propertyName: row.propertyName,
+    checkIn: row.checkIn,
+    checkOut: row.checkOut,
+    totalBookings: Number(row.totalBookings),
+    completedCount: Number(row.completedCount),
+    totalGuests: Number(row.totalGuests),
+  }));
 }
 
 export async function handleShopifyWebhook(input: {
@@ -484,6 +475,12 @@ export async function handleShopifyWebhook(input: {
     bookingReference,
     confirmationUrl,
   }).catch(() => {});
+
+  void syncTripGuestListToGoogleSheet({
+    propertyName: submission.propertyName,
+    checkIn: submission.checkIn,
+    checkOut: submission.checkOut,
+  });
 
   return {
     submissionId: submission.id,
